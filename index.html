@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#08060c">
+<title>Seni Seviyorum ❤</title>
+<style>
+  :root { --bg: #08060c; }              /* düz, koyu tema rengi */
+  html, body {
+    margin: 0; height: 100%; background: var(--bg); overflow: hidden; color: #fff;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+    touch-action: none; -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #stage {
+    position: fixed; inset: 0; overflow: hidden; background: var(--bg);
+  }
+  #stage.rot { right: auto; bottom: auto; transform: rotate(90deg); transform-origin: 50% 50%; }
+  #stage.anim { transition: transform .9s cubic-bezier(.65, .05, .25, 1); }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #spinHeart {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 30vmin; color: #ff4d6d; opacity: 0; transition: opacity .4s; pointer-events: none;
+    text-shadow: 0 0 40px rgba(255, 60, 120, .8);
+  }
+  #spinHeart.show { opacity: .9; }
+
+  .screen {
+    position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 18px; text-align: center;
+    padding: 20px; box-sizing: border-box;
+    background: var(--bg);
+    transition: opacity .8s ease;
+  }
+  .hidden { opacity: 0; pointer-events: none; }
+  h1 { margin: 0; font-size: clamp(22px, 5vw, 38px); font-weight: 700; }
+  p  { margin: 0; opacity: .75; font-size: clamp(14px, 3vw, 18px); }
+
+  button.start {
+    border: 0; border-radius: 999px; padding: 14px 44px; font-size: 22px; font-weight: 700;
+    color: #fff; background: linear-gradient(135deg, #ff4d6d, #f72585);
+    box-shadow: 0 0 28px rgba(255, 60, 120, .55); cursor: pointer;
+  }
+  button.start:active { transform: scale(.96); }
+
+  .phone {
+    width: 44px; height: 78px; border: 4px solid #ff6b9a; border-radius: 10px; position: relative;
+    animation: rot 2.4s ease-in-out infinite; box-shadow: 0 0 18px rgba(255, 90, 150, .5);
+  }
+  .phone::after {
+    content: ""; position: absolute; left: 50%; bottom: 5px; width: 12px; height: 3px;
+    margin-left: -6px; background: #ff6b9a; border-radius: 2px;
+  }
+  @keyframes rot { 0%, 20% { transform: rotate(0); } 65%, 100% { transform: rotate(-90deg); } }
+  #count { font-size: 56px; font-weight: 800; color: #ff6b9a; line-height: 1; margin-top: 14px; }
+  .txt { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; }
+  /* sözcük animasyonu: sahnenin içinde (sahne dönerse o da döner), arka plan şeffaf */
+  #wordsScreen, #rotateScreen { background: transparent; }
+  #wordsScreen { position: absolute; pointer-events: none; }
+  #word {
+    font-size: clamp(56px, 26vmin, 240px); font-weight: 800; letter-spacing: .02em; color: #fff;
+    opacity: 0; text-shadow: 0 0 30px rgba(255, 60, 120, .85), 0 0 90px rgba(255, 60, 120, .45);
+  }
+  #word.love { color: #ff4d6d; }
+  #word.in  { animation: wordIn  .45s cubic-bezier(.15, .9, .2, 1) forwards; }
+  #word.out { animation: wordOut .4s cubic-bezier(.6, 0, .9, .5) forwards; }
+  @keyframes wordIn  { from { opacity: 0; transform: scale(1.9); filter: blur(16px); }
+                       to   { opacity: 1; transform: none; filter: blur(0); } }
+  @keyframes wordOut { from { opacity: 1; transform: none; filter: blur(0); }
+                       to   { opacity: 0; transform: scale(.55); filter: blur(14px); } }
+  .phone.done { animation: none; transform: rotate(-90deg); }
+  /* yatay tutulurken de okunaklı kalsın */
+  @media (orientation: landscape) and (max-height: 520px) {
+    #rotateScreen { flex-direction: row; gap: 36px; }
+    #rotateScreen .txt { align-items: flex-start; text-align: left; gap: 6px; }
+    #count { font-size: 38px; margin-top: 4px; }
+    h1 { font-size: 24px; }
+  }
+
+  .ui {
+    position: absolute; top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right));
+    z-index: 5; display: flex; gap: 8px; opacity: .5;
+  }
+  .ui button {
+    width: 40px; height: 40px; border-radius: 50%; border: 0; font-size: 18px; cursor: pointer;
+    background: rgba(255, 255, 255, .12); color: #fff;
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="c"></canvas>
+  <div id="spinHeart">❤</div>
+  <div class="screen hidden" id="wordsScreen">
+    <div id="word"></div>
+  </div>
+  <div class="ui">
+    <button id="replayBtn" title="Baştan başlat">↻</button>
+    <button id="muteBtn" title="Sesi aç/kapa">🔊</button>
+  </div>
+</div>
+
+<div id="dbg" style="position:fixed;left:8px;bottom:8px;z-index:50;font:11px/1.3 monospace;color:#ff8fa3;opacity:.8;max-width:90vw;pointer-events:none"></div>
+
+<div class="screen" id="startScreen">
+  <h1>Başlamak için tıkla ♥</h1>
+  <button class="start" id="startBtn">Başla</button>
+  <p style="position:absolute;bottom:10px;font-size:11px;opacity:.3">v8</p>
+</div>
+
+<div class="screen hidden" id="rotateScreen">
+  <div class="phone"></div>
+  <div class="txt">
+    <h1 id="introTitle">Telefonunu yan çevir</h1>
+    <div id="count">5</div>
+  </div>
+</div>
+
+<script>
+/* ===================== AYARLAR ===================== */
+const CENTER_TEXT   = "Seni seviyorum";
+const MUSIC_VOLUME  = 0.12;     // müzik sesi (0 - 1). Daha da kısmak için küçült.
+const INTRO_SECONDS = 5;        // "telefonunu yan çevir" ekranının süresi (sn)
+const WORDS     = ["You", "are", "my", "love"];   // başlangıçta sırayla gelecek sözcükler
+const WORD_IN   = 0.45;         // sözcüğün gelme süresi (sn)
+const WORD_HOLD = 1.0;          // ekranda durma süresi (sn)
+const WORD_OUT  = 0.4;          // sözcüğün gidiş süresi (sn)
+const WORD_GAP  = 0.15;         // sözcükler arası boşluk (sn)
+const CYCLE = WORD_IN + WORD_HOLD + WORD_OUT + WORD_GAP;   // bir sözcüğün toplam süresi (müzik buna göre ayarlanır)
+
+// Her satır FARKLI bir dilde "seni seviyorum" (Türkçe ortadaki yazı olduğu için listede yok)
+const PHRASES = [
+  "I love you", "Te quiero", "Je t'aime", "Ich liebe dich", "Ti amo", "Eu te amo",
+  "Я тебя люблю", "愛してる", "我爱你", "사랑해", "أحبك", "मैं तुमसे प्यार करता हूँ",
+  "Σ' αγαπώ", "Ik hou van je", "Jag älskar dig", "Kocham cię", "Minä rakastan sinua",
+  "Szeretlek", "Miluji tě", "אני אוהב אותך", "ฉันรักคุณ", "Anh yêu em", "Aku cinta kamu",
+  "Nakupenda", "Te iubesc", "Я тебе кохаю", "Mahal kita", "دوستت دارم", "Səni sevirəm",
+  "Jeg elsker dig", "Jeg elsker deg", "Volim te", "Обичам те", "Aloha au iā ʻoe",
+  "Ndimakukonda", "Mi amas vin", "Te amo (Latin)", "T'estimo", "Maite zaitut", "Quérote",
+  "Tá grá agam duit", "Dwi'n dy garu di", "Tha gaol agam ort", "Ég elska þig",
+  "Ma armastan sind", "Es tevi mīlu", "Aš tave myliu", "Ľúbim ťa", "Ljubim te", "Të dua",
+  "Те сакам", "Я цябе кахаю", "მიყვარხარ", "Ես քեզ սիրում եմ", "Мен сені сүйемін",
+  "Seni sevaman", "Би чамд хайртай", "مجھے تم سے محبت ہے", "আমি তোমাকে ভালোবাসি",
+  "நான் உன்னை காதலிக்கிறேன்", "నేను నిన్ను ప్రేమిస్తున్నాను", "ഞാൻ നിന്നെ സ്നേഹിക്കുന്നു",
+  "ನಾನು ನಿನ್ನನ್ನು ಪ್ರೀತಿಸುತ್ತೇನೆ", "मी तुझ्यावर प्रेम करतो", "હું તને પ્રેમ કરું છું",
+  "ਮੈਂ ਤੈਨੂੰ ਪਿਆਰ ਕਰਦਾ ਹਾਂ", "म तिमीलाई माया गर्छु", "මම ඔබට ආදරෙයි", "ချစ်တယ်",
+  "ខ្ញុំស្រលាញ់អ្នក", "ຂ້ອຍຮັກເຈົ້າ", "Saya cintakan awak", "Ek is lief vir jou",
+  "Ngiyakuthanda", "Ndiyakuthanda", "Mo nifẹ rẹ", "Enwere m gị n'anya", "Ina son ka",
+  "እወድሃለሁ", "Waan ku jeclahay", "Inħobbok", "Ech hunn dech gär", "Ik hâld fan dy",
+  "איך האב דיך ליב", "Aroha au ki a koe", "Ou te alofa ia te oe", "Au domoni iko",
+  "Munayki", "Rohayhu", "Mwen renmen w", "Gihigugma tika", "Aku tresna sampeyan",
+  "Abdi bogoh ka anjeun", "Da garout a ran", "T'aimi", "Ez te hez dikim",
+  "Ман туро дӯст медорам", "Men seni söýýärin", "Мен сени сүйөм", "Мин сине яратам",
+  "Kuv hlub koj", "Nalingi yo", "Ndinokuda", "Tiako ianao", "Ndagukunda", "Dama la bëgg",
+  "Me dɔ wo", "अहं त्वां प्रेम करोमि", "ମୁଁ ତୁମକୁ ଭଲ ପାଏ", "মই তোমাক ভাল পাওঁ",
+  "Ua here vau ia oe"
+].map(s => s.replace(" (Latin)", ""));
+
+const FONT = '"Segoe UI", system-ui, -apple-system, Roboto, "Noto Sans", sans-serif';
+const PALETTE = ["#ff4d6d", "#ff758f", "#ff8fa3", "#ffb3c1", "#ff2e63", "#f72585", "#ff5d8f", "#ffd6e0"];
+
+/* ===================== YARDIMCILAR ===================== */
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const easeOutCubic = u => 1 - Math.pow(1 - u, 3);
+const easeOutBack = u => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(u - 1, 3) + c1 * Math.pow(u - 1, 2); };
+const heartPoint = t => [
+  16 * Math.pow(Math.sin(t), 3),
+  13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)
+];
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+/* ===================== CANVAS ===================== */
+const cv = document.getElementById("c");
+const ctx = cv.getContext("2d");
+let W = 0, H = 0, DPR = 1;
+const stage = document.getElementById("stage");
+let rotMode = false, rotWanted = false;       // rotMode: telefon dikeyken sahneyi 90° yan çevirip yatay göster
+
+function applyStage(animate) {
+  const w = window.innerWidth, h = window.innerHeight;
+  const want = rotWanted && w < h;
+  if (want) {
+    stage.style.width = h + "px"; stage.style.height = w + "px";
+    stage.style.left = (w - h) / 2 + "px"; stage.style.top = (h - w) / 2 + "px";
+    if (animate && !stage.classList.contains("rot")) {
+      stage.classList.remove("rot"); stage.classList.add("anim");
+      void stage.offsetWidth;                  // başlangıç halini uygula, sonra dönmeye geç
+      stage.classList.add("rot");
+      setTimeout(() => stage.classList.remove("anim"), 1200);
+    } else stage.classList.add("rot");
+  } else {
+    stage.classList.remove("rot", "anim");
+    ["width", "height", "left", "top"].forEach(k => { stage.style[k] = ""; });
+  }
+  rotMode = want;
+}
+const toLogical = e => rotMode ? [e.clientY, window.innerWidth - e.clientX] : [e.clientX, e.clientY];
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const iw = window.innerWidth, ih = window.innerHeight;
+  W = rotMode ? ih : iw; H = rotMode ? iw : ih;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+
+let items = [], poly = [], cx = 0, cy = 0, center = { x: 0, y: 0, size: 40 };
+let settle = 0, centerStart = 0, floaters = [];
+
+/* ===================== YERLEŞİM (çakışmasız) ===================== */
+function buildLayout() {
+  const N = 720, pts = [];
+  for (let i = 0; i < N; i++) pts.push(heartPoint(2 * Math.PI * i / N));
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  const xmin = Math.min(...xs), xmax = Math.max(...xs), ymin = Math.min(...ys), ymax = Math.max(...ys);
+  const scale = Math.min(W * 0.94 / (xmax - xmin), H * 0.90 / (ymax - ymin));
+  const midy = (ymax + ymin) / 2;
+  cx = W / 2; cy = H / 2 + H * 0.01;
+  poly = pts.map(([x, y]) => [cx + x * scale, cy - (y - midy) * scale]);
+  const heartH = (ymax - ymin) * scale;
+
+  // --- yazı boyutu ve şerit kalınlığı ---
+  const minSize = Math.max(10, heartH / 64);
+  const size = Math.max(minSize, heartH / 56);
+  const rowH = size * 1.6, hh = size * 0.62;
+  const dBand = heartH * 0.15;                                // kalbin kenarından içeri doğru şerit kalınlığı
+
+  // --- maskeler: dış kalp, ve şeridin içinde kalan boş orta bölge ---
+  const W2 = Math.ceil(W), H2 = Math.ceil(H);
+  const mk = () => { const c = document.createElement("canvas"); c.width = W2; c.height = H2; return c; };
+  const trace = c => { c.beginPath(); poly.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.closePath(); };
+  const oc = mk(), octx = oc.getContext("2d");
+  octx.fillStyle = "#fff"; trace(octx); octx.fill();
+  const outerData = octx.getImageData(0, 0, W2, H2).data;
+  const ic = mk(), ictx = ic.getContext("2d");
+  ictx.fillStyle = "#fff"; trace(ictx); ictx.fill();
+  ictx.strokeStyle = "#000"; ictx.lineWidth = dBand * 2; ictx.lineJoin = "round"; trace(ictx); ictx.stroke();
+  const innerData = ictx.getImageData(0, 0, W2, H2).data;
+  const ok = (x, y) => x >= 0 && y >= 0 && x < W2 && y < H2;
+  const px = (x, y) => ((y | 0) * W2 + (x | 0)) * 4;
+  const inOuter = (x, y) => ok(x, y) && outerData[px(x, y) + 3] > 128;
+  const inInner = (x, y) => ok(x, y) && innerData[px(x, y)] > 128;
+  const inBand = (x, y) => inOuter(x, y) && !inInner(x, y);
+
+  // --- ortadaki Türkçe yazı: şeridin içindeki boşluğa sığacak en büyük boyut ---
+  ctx.font = `800 100px ${FONT}`;
+  const w100 = ctx.measureText(CENTER_TEXT).width;
+  let bestC = { size: 12, y: cy };
+  for (const off of [0.01, -0.02, -0.05, -0.08, -0.11, -0.14, -0.17, -0.20, -0.23]) {   // önce merkezden başla, belirgin şekilde büyük yer varsa yukarı al
+    const yc = cy + heartH * off;
+    let c = heartH / 8.5;
+    const fits = f => {
+      const hw = w100 * f / 200 + f * 0.15, h2 = f * 0.68;
+      return [[-hw, -h2], [hw, -h2], [-hw, h2], [hw, h2], [0, -h2], [0, h2], [-hw, 0], [hw, 0]]
+        .every(([dx, dy]) => inInner(cx + dx, yc + dy));
+    };
+    while (c > 12 && !fits(c)) c *= 0.97;
+    if (c > bestC.size * 1.02) bestC = { size: c, y: yc };
+  }
+  center = { x: cx, y: bestC.y, size: bestC.size };
+
+  // --- şerit içindeki satırları bul (düz, yatay yazılar) ---
+  ctx.font = `700 ${size}px ${FONT}`;
+  const pool = shuffle(PHRASES.slice()).map(t => ({ text: t, w: ctx.measureText(t).width }));
+  const gapMin = size * 0.9, edge = size * 0.4, maxGap = size * 2.6;
+  const minY = Math.min(...poly.map(p => p[1])), maxY = Math.max(...poly.map(p => p[1]));
+  const minX = Math.min(...poly.map(p => p[0])), maxX = Math.max(...poly.map(p => p[0]));
+  const segs = [];
+  for (let k = -80; k <= 80; k++) {
+    const y = cy + k * rowH;
+    if (y < minY + hh || y > maxY - hh) continue;
+    let start = null;
+    for (let x = Math.floor(minX) - 2; x <= Math.ceil(maxX) + 4; x += 2) {
+      const good = inBand(x, y - hh) && inBand(x, y) && inBand(x, y + hh);
+      if (good && start === null) start = x;
+      if (!good && start !== null) {
+        const end = x - 2;
+        if (end - start > size * 2.5) segs.push({ y, xl: start + edge, xr: end - edge });
+        start = null;
+      }
+    }
+  }
+  segs.sort((a, b) => (a.xr - a.xl) - (b.xr - b.xl));          // dar parçalardan başla (kısa yazılar dar yerlere, kalanlar geniş yerlere)
+
+  const placed = [];
+  let ci = 0;
+  for (const sg of segs) {
+    const L = sg.xr - sg.xl, chosen = [];
+    let used = 0;
+    for (let i = 0; i < pool.length; i++) {
+      const need = pool[i].w + (chosen.length ? gapMin : 0);
+      if (used + need <= L) { chosen.push(pool.splice(i, 1)[0]); used += need; i--; }
+    }
+    if (!chosen.length) continue;
+    shuffle(chosen);
+    const sw = chosen.reduce((a, c) => a + c.w, 0), n = chosen.length;
+    let gap = n > 1 ? (L - sw) / (n + 1) : 0, x;
+    if (n === 1) x = sg.xl + (L - sw) / 2;
+    else if (gap > maxGap) { gap = maxGap; x = sg.xl + (L - (sw + gap * (n - 1))) / 2; }
+    else x = sg.xl + gap;
+    for (const c of chosen) {
+      placed.push({ text: c.text, x: x + c.w / 2, y: sg.y, color: PALETTE[ci++ % PALETTE.length] });
+      x += c.w + gap;
+    }
+  }
+
+  items = placed.map(o => {
+    const left = Math.random() < 0.5;
+    return {
+      text: o.text, size, tx: o.x, ty: o.y, rot: 0, color: o.color,
+      sx: left ? -W * 0.4 : W * 1.4, sy: rand(-H * 0.2, H * 1.2),
+      delay: rand(0, 4.5), dur: rand(2.0, 3.0),
+      ang0: (Math.random() < 0.5 ? -1 : 1) * rand(360, 1080) * Math.PI / 180,
+      amp: (Math.random() < 0.5 ? -1 : 1) * rand(0.08, 0.25) * Math.max(W, H),
+      bob: rand(0, 6.28)
+    };
+  });
+
+  settle = Math.max(...items.map(i => i.delay + i.dur));
+  centerStart = Math.max(...items.map(i => i.delay)) * 0.8 + 1.0;
+}
+
+function makeFloaters() {
+  floaters = [];
+  for (let i = 0; i < 34; i++) floaters.push({
+    x: rand(0, W), y: rand(0, H), v: rand(14, 45), s: rand(H / 55, H / 22),
+    a: rand(0.2, 0.5), ph: rand(0, 6.28)
+  });
+}
+function drawMiniHeart(x, y, size, alpha) {
+  ctx.globalAlpha = alpha; ctx.fillStyle = "#ff6496"; ctx.beginPath();
+  for (let i = 0; i < 28; i++) {
+    const [hx, hy] = heartPoint(2 * Math.PI * i / 28);
+    const px = x + hx * size / 36, py = y - (hy + 2.5) * size / 36;
+    i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+  }
+  ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+}
+
+/* ===================== DOKUNMA KALPLERİ ===================== */
+const HEART_COLORS = ["#ff4d6d", "#ff758f", "#ff2e63", "#f72585", "#ffb3c1", "#ffffff"];
+const parts = [];
+function spawnHearts(x, y, n) {
+  for (let i = 0; i < n; i++) {
+    const a = rand(-Math.PI * 0.95, -Math.PI * 0.05);          // yukarı doğru yelpaze
+    const sp = rand(70, 260);
+    parts.push({
+      x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, rot: rand(-0.6, 0.6), vr: rand(-2, 2),
+      s: rand(Math.max(10, H / 50), Math.max(18, H / 16)), life: 0, max: rand(1.1, 2.1),
+      col: pick(HEART_COLORS), ph: rand(0, 6.28)
+    });
+  }
+  if (parts.length > 300) parts.splice(0, parts.length - 300);
+}
+function drawParticles(dt, t) {
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const q = parts[i];
+    q.life += dt;
+    const k = q.life / q.max;
+    if (k >= 1) { parts.splice(i, 1); continue; }
+    q.vx *= 0.985; q.vy = q.vy * 0.985 - 25 * dt;
+    q.x += (q.vx + Math.sin(t * 4 + q.ph) * 14) * dt; q.y += q.vy * dt; q.rot += q.vr * dt;
+    const size = q.s * (0.6 + 0.4 * Math.min(1, k * 6));
+    ctx.save();
+    ctx.translate(q.x, q.y); ctx.rotate(q.rot);
+    ctx.globalAlpha = Math.max(0, 1 - k * k);
+    ctx.fillStyle = q.col; ctx.shadowColor = "#ff2e63"; ctx.shadowBlur = size * 0.5;
+    ctx.beginPath();
+    for (let j = 0; j < 28; j++) {
+      const [hx, hy] = heartPoint(2 * Math.PI * j / 28);
+      const px = hx * size / 36, py = -(hy + 2.5) * size / 36;
+      j ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* ===================== BİTKİLER (arka planda büyüyüp çiçek açar) ===================== */
+const FLOWER_COLORS = ["#ff4d6d", "#ff758f", "#ff8fa3", "#f72585", "#ffd6e0", "#c77dff", "#ffffff"];
+const LEAF_COLORS = ["#1f6f4d", "#2a8a5c", "#1a5c42", "#33a06a"];
+const STEM_COLOR = "#1d6a47";
+let plants = [];
+
+function buildStem(x0, y0, ang0, length, step, wob, xmin, xmax) {
+  const pts = [{ x: x0, y: y0 }];
+  let a = ang0, x = x0, y = y0, curve = rand(-1, 1) * wob;
+  const n = Math.max(6, Math.round(length / step));
+  for (let i = 0; i < n; i++) {
+    curve = Math.max(-wob, Math.min(wob, curve + rand(-0.3, 0.3) * wob * 0.4));
+    a += curve * 0.07 + (ang0 - a) * 0.04;
+    x = Math.max(xmin, Math.min(xmax, x + Math.cos(a) * step)); y += Math.sin(a) * step;
+    pts.push({ x, y });
+  }
+  return pts;
+}
+function makePlant(x0, y0, ang0, length, o) {
+  const u = o.u, pts = buildStem(x0, y0, ang0, length, 9 * u, o.wob || 0.9, o.xmin, o.xmax), n = pts.length;
+  const leaves = [], flowers = [];
+  let side = Math.random() < 0.5 ? 1 : -1;
+  for (let i = 3; i < n - 1; i += (o.dense ? 2 : 3) + Math.floor(rand(0, 3)), side = -side)
+    leaves.push({ i, side, len: rand(o.dense ? 7 : 14, o.dense ? 13 : 26) * u * (1 - 0.5 * i / n), ang: rand(0.6, 1.1), col: pick(LEAF_COLORS) });
+  if (o.flowers) {
+    flowers.push({ i: n - 1, stalk: 0, ang: 0, r: rand(11, 19) * u * (o.fs || 1), col: pick(FLOWER_COLORS), petals: 5 + Math.floor(rand(0, 4)), rot: rand(0, 6.28) });
+    const extra = Math.floor(rand(1, 4));
+    for (let k = 0; k < extra; k++)
+      flowers.push({ i: Math.floor(rand(n * 0.35, n * 0.9)), stalk: rand(14, 30) * u, ang: (Math.random() < 0.5 ? -1 : 1) * rand(0.7, 1.2),
+                     r: rand(8, 14) * u * (o.fs || 1), col: pick(FLOWER_COLORS), petals: 5 + Math.floor(rand(0, 4)), rot: rand(0, 6.28) });
+  }
+  return { pts, n, leaves, flowers, delay: o.delay, dur: o.dur, w: (o.w || 3) * u, sway: (o.sway || 6) * u, ph: rand(0, 6.28) };
+}
+function makePlants() {
+  plants = [];
+  if (!poly.length) return;
+  const u = Math.max(0.55, Math.min(1.4, H / 720));
+  const xsP = poly.map(q => q[0]), hl = Math.min(...xsP), hr = Math.max(...xsP);
+  const zones = [[W * 0.015, hl - W * 0.015, -1], [hr + W * 0.015, W * 0.985, 1]];   // kalbin iki yanındaki boş alan
+  for (const [z0, z1, dir] of zones) {
+    const zw = z1 - z0;
+    if (zw < 30) continue;
+    const cnt = Math.max(2, Math.min(7, Math.round(zw / 48)));
+    for (let k = 0; k < cnt; k++) {                           // yukarı büyüyen uzun bitkiler
+      const x = z0 + (k + 0.5) / cnt * zw + rand(-0.3, 0.3) * zw / cnt;
+      plants.push(makePlant(x, H + 4, -Math.PI / 2 + dir * rand(0.05, 0.3), rand(0.3, 0.78) * H,
+        { u, xmin: z0 - 8, xmax: z1 + 8, flowers: true, delay: rand(0.2, 3), dur: rand(4, 6.5), w: rand(2.4, 3.6), sway: rand(4, 9) }));
+    }
+    for (let k = 0; k < 2; k++) {                             // yukarıdan sarkan sarmaşıklar
+      const x = z0 + rand(0.15, 0.85) * zw;
+      plants.push(makePlant(x, -4, Math.PI / 2 - dir * rand(0.05, 0.25), rand(0.18, 0.4) * H,
+        { u, xmin: z0 - 8, xmax: z1 + 8, flowers: true, fs: 0.8, delay: rand(1, 4), dur: rand(4, 6), w: 2.2, sway: rand(3, 7) }));
+    }
+  }
+  for (let x = 6 * u; x < W; x += 22 * u) {                   // altta çimenler
+    if (x > hl + (hr - hl) * 0.25 && x < hr - (hr - hl) * 0.25) continue;
+    plants.push(makePlant(x + rand(-6, 6), H + 2, -Math.PI / 2 + rand(-0.4, 0.4), rand(0.04, 0.1) * H,
+      { u, xmin: 0, xmax: W, dense: true, delay: rand(0, 2), dur: rand(3, 4.5), w: 1.8, sway: 3, wob: 1.4 }));
+  }
+}
+function drawFlower(x, y, r, b, col, petals, rot, t) {
+  if (b <= 0) return;
+  const R = r * easeOutBack(b), step = 2 * Math.PI / petals;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot + Math.sin(t * 0.6 + x) * 0.06);
+  ctx.fillStyle = col;
+  for (let k = 0; k < petals; k++) { ctx.beginPath(); ctx.ellipse(R * 0.62, 0, R * 0.62, R * 0.34, 0, 0, 6.2832); ctx.fill(); ctx.rotate(step); }
+  ctx.fillStyle = "#ffd166"; ctx.beginPath(); ctx.arc(0, 0, R * 0.24, 0, 6.2832); ctx.fill();
+  ctx.restore();
+}
+function drawPlants(t) {
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  for (const pl of plants) {
+    const g = Math.min(1, Math.max(0, (t - pl.delay) / pl.dur));
+    if (g <= 0) continue;
+    const idxF = easeOutCubic(g) * (pl.n - 1), lastI = Math.floor(idxF);
+    const sp = i => {                                          // rüzgârla sallanan nokta
+      const q = pl.pts[i], k = i / (pl.n - 1);
+      return [q.x + Math.sin(t * 0.9 + pl.ph + i * 0.09) * pl.sway * Math.pow(k, 1.4), q.y];
+    };
+    const P = [];
+    for (let i = 0; i <= lastI; i++) P.push(sp(i));
+    if (lastI < pl.n - 1) { const a = sp(lastI), b = sp(lastI + 1), f = idxF - lastI; P.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]); }
+    // gövde: kalından inceye 3 parça
+    ctx.strokeStyle = STEM_COLOR;
+    for (let s3 = 0; s3 < 3; s3++) {
+      const i0 = Math.floor((P.length - 1) * s3 / 3), i1 = Math.min(P.length - 1, Math.ceil((P.length - 1) * (s3 + 1) / 3));
+      if (i1 <= i0) continue;
+      ctx.lineWidth = pl.w * (1 - 0.28 * s3); ctx.beginPath(); ctx.moveTo(P[i0][0], P[i0][1]);
+      for (let i = i0 + 1; i <= i1; i++) ctx.lineTo(P[i][0], P[i][1]);
+      ctx.stroke();
+    }
+    // yapraklar
+    for (const lf of pl.leaves) {
+      if (lf.i > idxF) continue;
+      const sc = easeOutBack(Math.min(1, (idxF - lf.i) / 7));
+      const [px, py] = P[lf.i] || P[P.length - 1];
+      const a = P[Math.max(0, lf.i - 1)], b = P[Math.min(P.length - 1, lf.i + 1)];
+      const ang = Math.atan2(b[1] - a[1], b[0] - a[0]) + lf.side * lf.ang;
+      ctx.save(); ctx.translate(px, py); ctx.rotate(ang); ctx.scale(sc, sc);
+      ctx.fillStyle = lf.col; ctx.beginPath(); ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(lf.len * 0.5, -lf.len * 0.32, lf.len, 0); ctx.quadraticCurveTo(lf.len * 0.5, lf.len * 0.32, 0, 0);
+      ctx.fill(); ctx.restore();
+    }
+    // çiçekler (gövde ulaştıkça açılır)
+    for (const fl of pl.flowers) {
+      const tip = fl.i === pl.n - 1;
+      const b = tip ? Math.min(1, Math.max(0, (idxF - (pl.n - 11)) / 10))
+                    : Math.min(1, Math.max(0, (idxF - fl.i) / Math.min(10, Math.max(2, pl.n - 1 - fl.i))));
+      if (b <= 0) continue;
+      let [fx, fy] = tip ? P[P.length - 1] : (P[fl.i] || P[P.length - 1]);
+      if (fl.stalk) {
+        const a = P[Math.max(0, fl.i - 1)], c = P[Math.min(P.length - 1, fl.i + 1)];
+        const ang = Math.atan2(c[1] - a[1], c[0] - a[0]) + fl.ang, L = fl.stalk * easeOutCubic(b);
+        const ex = fx + Math.cos(ang) * L, ey = fy + Math.sin(ang) * L;
+        ctx.strokeStyle = STEM_COLOR; ctx.lineWidth = pl.w * 0.5; ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(ex, ey); ctx.stroke();
+        fx = ex; fy = ey;
+      }
+      drawFlower(fx, fy, fl.r, b, fl.col, fl.petals, fl.rot, t);
+    }
+  }
+}
+
+/* ===================== KALBİ TUTUP OYNATMA (bırakınca yay gibi yerine döner) ===================== */
+let grab = null;                                               // {sx, sy, cx, cy}
+const cj = { ox: 0, oy: 0, vx: 0, vy: 0, k: 60, c: 2 * Math.sqrt(60) * 0.4 };   // ortadaki yazının yayı
+function pointInPoly(P, x, y) {
+  let c = false;
+  for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
+    const [xi, yi] = P[i], [xj, yj] = P[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c;
+  }
+  return c;
+}
+function startGrab(lx, ly) {
+  grab = { sx: lx, sy: ly, cx: lx, cy: ly };
+  const R = Math.max(1, Math.min(W, H) * 0.6);
+  for (const it of items) it.gw = Math.max(0.15, 1 - Math.hypot(it.tx - lx, it.ty - ly) / R);   // parmağa yakın olanlar daha çok gelir
+}
+function updateJelly(dt) {
+  const maxD = Math.min(W, H) * 0.3;
+  let Dx = 0, Dy = 0;
+  if (grab) {
+    Dx = grab.cx - grab.sx; Dy = grab.cy - grab.sy;
+    const m = Math.hypot(Dx, Dy);
+    if (m > maxD) { Dx *= maxD / m; Dy *= maxD / m; }
+  }
+  const steps = dt > 0.02 ? 2 : 1, h = dt / steps;
+  for (let s = 0; s < steps; s++) {
+    for (const it of items) {
+      if (it.k === undefined) { it.k = rand(55, 110); it.c = 2 * Math.sqrt(it.k) * 0.4; it.ox = it.oy = it.vx = it.vy = 0; it.gw = 0; }
+      const w = grab ? it.gw : 0;
+      it.vx += ((Dx * w - it.ox) * it.k - it.vx * it.c) * h; it.vy += ((Dy * w - it.oy) * it.k - it.vy * it.c) * h;
+      it.ox += it.vx * h; it.oy += it.vy * h;
+    }
+    const w = grab ? 0.95 : 0;
+    cj.vx += ((Dx * w - cj.ox) * cj.k - cj.vx * cj.c) * h; cj.vy += ((Dy * w - cj.oy) * cj.k - cj.vy * cj.c) * h;
+    cj.ox += cj.vx * h; cj.oy += cj.vy * h;
+  }
+  if (!grab) {                                                 // tamamen durunca yerine oturt
+    for (const it of items) if (Math.abs(it.ox) + Math.abs(it.oy) + Math.abs(it.vx) + Math.abs(it.vy) < 0.05) it.ox = it.oy = it.vx = it.vy = 0;
+    if (Math.abs(cj.ox) + Math.abs(cj.oy) + Math.abs(cj.vx) + Math.abs(cj.vy) < 0.05) cj.ox = cj.oy = cj.vx = cj.vy = 0;
+  }
+}
+
+/* ===================== ANİMASYON ===================== */
+let started = false, bgOn = false, t0 = 0, last = 0;
+const BG = "#08060c";                                          // düz koyu arka plan
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (!started && !bgOn) return;
+  const t = started ? (now - t0) / 1000 : 0;
+  const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now;
+
+  // kalp atışı (yazılar yerleştikten sonra)
+  let p = 0, beat = 1;
+  if (started && t > settle) {
+    const ph = ((t - settle) * 1.15) % 1;
+    p = Math.exp(-Math.pow((ph - 0.08) / 0.05, 2)) + 0.65 * Math.exp(-Math.pow((ph - 0.28) / 0.05, 2));
+    beat = 1 + 0.035 * p;
+  }
+
+  ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
+
+  if (started) {
+    drawPlants(t);
+    updateJelly(dt);
+
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for (const it of items) {
+      const u = (t - it.delay) / it.dur;
+      if (u <= 0) continue;
+      ctx.font = `700 ${it.size}px ${FONT}`;
+      ctx.fillStyle = it.color;
+      if (u < 1) {
+        const e = easeOutCubic(u);
+        const dx = it.tx - it.sx, dy = it.ty - it.sy, ln = Math.hypot(dx, dy) || 1;
+        const sw = Math.sin(Math.PI * e) * it.amp;
+        const x = it.sx + dx * e - dy / ln * sw, y = it.sy + dy * e + dx / ln * sw;
+        ctx.save();
+        ctx.translate(x, y); ctx.rotate(it.rot + it.ang0 * (1 - e));
+        const sc = 0.25 + 0.75 * e; ctx.scale(sc, sc);
+        ctx.globalAlpha = Math.min(1, u * 3);
+        ctx.fillText(it.text, 0, 0);
+        ctx.restore();
+      } else {
+        const x = cx + (it.tx - cx) * beat + (it.ox || 0);
+        const y = cy + (it.ty - cy) * beat + Math.sin(t * 1.4 + it.bob) * 0.8 + (it.oy || 0);
+        ctx.save();
+        ctx.translate(x, y); ctx.rotate(it.rot);
+        ctx.fillText(it.text, 0, 0);
+        ctx.restore();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // ortadaki "Seni seviyorum"
+    let cu = (t - centerStart) / 1.6;
+    if (cu > 0) {
+      cu = Math.min(cu, 1);
+      const k = (0.5 + 0.5 * easeOutBack(cu)) * (1 + 0.05 * p);
+      ctx.save();
+      ctx.translate(center.x + cj.ox, center.y + cj.oy); ctx.scale(k, k);
+      ctx.globalAlpha = cu;
+      ctx.font = `800 ${center.size}px ${FONT}`;
+      ctx.lineJoin = "round"; ctx.lineWidth = center.size / 11; ctx.strokeStyle = "#ff3d77";
+      ctx.shadowColor = "#ff2e63"; ctx.shadowBlur = center.size / 3;
+      ctx.strokeText(CENTER_TEXT, 0, 0);
+      ctx.shadowBlur = 0; ctx.fillStyle = "#fff";
+      ctx.fillText(CENTER_TEXT, 0, 0);
+      ctx.restore();
+    }
+  }
+
+  drawParticles(dt, now / 1000);
+}
+requestAnimationFrame(frame);
+
+function begin() {
+  applyStage(); resize(); buildLayout(); makePlants();
+  document.getElementById("spinHeart").classList.remove("show");
+  grab = null; cj.ox = cj.oy = cj.vx = cj.vy = 0;
+  t0 = last = performance.now(); started = true;
+  if (audioOn()) startMain(ac.currentTime + 0.05);              // kalp gelince ana müzik girer
+  else if (ac) ac.resume().then(() => { if (started && !mainGain && audioOn()) startMain(ac.currentTime + 0.05); }).catch(() => {});
+}
+
+let rzTimer;
+function onResize() {
+  clearTimeout(rzTimer);
+  rzTimer = setTimeout(() => {
+    applyStage(); resize();
+    try { updateIntro(); } catch (e) {}
+    if (started) { buildLayout(); makePlants(); t0 = performance.now() - Math.max(settle + 0.5, 10) * 1000; }
+  }, 250);
+}
+window.addEventListener("resize", onResize);
+window.addEventListener("orientationchange", onResize);
+
+/* ===================== MÜZİK (Web Audio ile üretilir) ===================== */
+let ac = null, master = null, bus = null, musicOn = true, noiseBuf = null;
+let loopIv = null, mainGain = null, introGain = null, ambGain = null, ambOscs = [];
+const mf = m => 440 * Math.pow(2, (m - 69) / 12);
+const nowS = () => performance.now() / 1000;          // kelime zamanlaması tek saatle (tarayıcı saati) yapılır
+const audioOn = () => ac && ac.state === "running";
+
+function tone(freq, t, dur, kind, out) {
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.frequency.value = freq; o.connect(g); g.connect(out || bus);
+  g.gain.setValueAtTime(0.0001, t);
+  if (kind === "pad") {
+    o.type = "triangle";
+    g.gain.linearRampToValueAtTime(0.06, t + Math.min(0.6, dur * 0.3));
+    g.gain.setValueAtTime(0.06, t + dur * 0.65);
+    g.gain.linearRampToValueAtTime(0.0001, t + dur);
+    o.start(t); o.stop(t + dur + 0.05);
+    return;
+  }
+  const cfg = { pluck: [0.16, 0.012, 1.2], bell: [0.18, 0.01, 2.4], bell2: [0.05, 0.01, 1.4], bass: [0.30, 0.02, 1.9] }[kind];
+  o.type = "sine";
+  const len = kind === "pluck" ? Math.min(cfg[2], dur) : cfg[2];
+  g.gain.linearRampToValueAtTime(cfg[0], t + cfg[1]);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+  o.start(t); o.stop(t + len + 0.05);
+}
+
+// ---- ana (kalp) müziği: sakin döngü ----
+const BEAT = 60 / 76, LOOP = 16 * BEAT;
+const CHORDS = [
+  { bass: 48, arp: [60, 64, 67, 72], pad: [55, 60, 64] },  // C
+  { bass: 43, arp: [59, 62, 67, 71], pad: [55, 59, 62] },  // G
+  { bass: 45, arp: [57, 60, 64, 69], pad: [57, 60, 64] },  // Am
+  { bass: 41, arp: [57, 60, 65, 69], pad: [53, 57, 60] }   // F
+];
+const MELODY = [[0,0,76,2],[0,2,74,1],[0,3,72,1],[1,0,71,2],[1,2,74,2],[2,0,72,2],[2,2,76,1],[2,3,69,1],[3,0,69,2],[3,2,72,1],[3,3,74,1]];
+const ARP_PATTERN = [0, 1, 2, 3, 2, 1, 2, 1];
+
+function scheduleLoop(start, out) {
+  CHORDS.forEach((c, b) => {
+    const t0 = start + b * 4 * BEAT;
+    tone(mf(c.bass), t0, 2.2, "bass", out);
+    c.pad.forEach(n => tone(mf(n), t0, 4 * BEAT + 0.6, "pad", out));
+    ARP_PATTERN.forEach((idx, k) => tone(mf(c.arp[idx]), t0 + k * BEAT / 2, 1.3, "pluck", out));
+  });
+  MELODY.forEach(([bar, bt, note]) => {
+    const t = start + bar * 4 * BEAT + bt * BEAT;
+    tone(mf(note), t, 2.4, "bell", out); tone(mf(note) * 2, t, 1.4, "bell2", out);
+  });
+}
+function startMain(t) {
+  if (!ac) return;
+  stopMain();
+  mainGain = ac.createGain();
+  mainGain.gain.setValueAtTime(0.0001, t); mainGain.gain.linearRampToValueAtTime(1, t + 1.2);
+  mainGain.connect(bus);
+  const g = mainGain;
+  let next = t;
+  const tick = () => { while (next < ac.currentTime + 4) { scheduleLoop(next, g); next += LOOP; } };
+  tick(); loopIv = setInterval(tick, 1000);
+}
+function fadeOut(g, tc) { if (g) { try { g.gain.cancelScheduledValues(ac.currentTime); g.gain.setTargetAtTime(0, ac.currentTime, tc); } catch (e) {} } }
+function stopMain() { if (loopIv) { clearInterval(loopIv); loopIv = null; } fadeOut(mainGain, 0.12); mainGain = null; }
+function stopAll() {
+  stopMain(); fadeOut(introGain, 0.05); introGain = null; fadeOut(ambGain, 0.3); ambGain = null;
+  ambOscs.forEach(o => { try { o.stop(ac.currentTime + 1.5); } catch (e) {} }); ambOscs = [];
+}
+
+// ---- giriş müziği: "edit" tarzı, sözcüklerin gelip gitmesine vuruşlarla bağlı ----
+function getNoise() {
+  if (!noiseBuf) {
+    noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  return noiseBuf;
+}
+function noiseSrc(t, dur) { const s = ac.createBufferSource(); s.buffer = getNoise(); s.loop = true; s.start(t); s.stop(t + dur); return s; }
+function env(g, t, peak, dur) { g.gain.setValueAtTime(peak, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur); }
+function kick(t, out, v) {
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = "sine"; o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.14);
+  env(g, t, v, 0.38); o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.4);
+}
+function hat(t, out, v) {
+  const n = noiseSrc(t, 0.07), f = ac.createBiquadFilter(), g = ac.createGain();
+  f.type = "highpass"; f.frequency.value = 7000; env(g, t, v, 0.05); n.connect(f); f.connect(g); g.connect(out);
+}
+function clap(t, out, v) {
+  const n = noiseSrc(t, 0.2), f = ac.createBiquadFilter(), g = ac.createGain();
+  f.type = "bandpass"; f.frequency.value = 1700; f.Q.value = 0.9; env(g, t, v, 0.16); n.connect(f); f.connect(g); g.connect(out);
+}
+function boom(t, out, v) {
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = "sine"; o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(32, t + 0.7);
+  env(g, t, v, 1.2); o.connect(g); g.connect(out); o.start(t); o.stop(t + 1.3);
+}
+function cymbal(t, out) {
+  const n = noiseSrc(t, 1.9), f = ac.createBiquadFilter(), g = ac.createGain();
+  f.type = "highpass"; f.frequency.value = 5500; env(g, t, 0.26, 1.8); n.connect(f); f.connect(g); g.connect(out);
+}
+function sweep(t, dur, peak, out) {
+  const n = noiseSrc(t, dur + 0.06), f = ac.createBiquadFilter(), g = ac.createGain();
+  f.type = "bandpass"; f.Q.value = 1.5;
+  f.frequency.setValueAtTime(300, t); f.frequency.exponentialRampToValueAtTime(7000, t + dur);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + dur * 0.96); g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.05);
+  n.connect(f); f.connect(g); g.connect(out);
+}
+function impact(t, out, v) { kick(t, out, 0.9 * v); boom(t, out, 0.8 * v); const n = noiseSrc(t, 0.6), f = ac.createBiquadFilter(), g = ac.createGain(); f.type = "highpass"; f.frequency.value = 1500; env(g, t, 0.3 * v, 0.5); n.connect(f); f.connect(g); g.connect(out); }
+function bassNote(t, midi, dur, out) {
+  const o = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain();
+  o.type = "sawtooth"; o.frequency.value = mf(midi); f.type = "lowpass"; f.frequency.value = 260; f.Q.value = 2;
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.3, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(f); f.connect(g); g.connect(out); o.start(t); o.stop(t + dur + 0.05);
+}
+function startAmbient() {                                      // "telefonunu çevir" ekranında alçak, karanlık bir uğultu
+  if (!ac) return;
+  ambGain = ac.createGain(); ambGain.gain.setValueAtTime(0.0001, ac.currentTime); ambGain.gain.linearRampToValueAtTime(0.5, ac.currentTime + 2);
+  const f = ac.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 380; f.Q.value = 1;
+  f.connect(ambGain); ambGain.connect(bus);
+  [57, 64].forEach((m, i) => {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = "sawtooth"; o.frequency.value = mf(m) * (i ? 1.004 : 1); g.gain.value = 0.12;
+    o.connect(g); g.connect(f); o.start(); ambOscs.push(o);
+  });
+}
+function introMusic(T0) {
+  stopMain();
+  const out = ac.createGain(); out.connect(bus); introGain = out;
+  fadeOut(ambGain, 0.35);
+  const B = CYCLE / 4;                                         // bir vuruş: her sözcük 4 vuruş sürer
+  const CH = [{ r: 45, ch: [57, 60, 64] }, { r: 41, ch: [53, 57, 60] }, { r: 36, ch: [55, 60, 64] }, { r: 43, ch: [55, 59, 62] }];   // Am F C G
+  sweep(T0 - 1.0, 1.0, 0.5, out);                              // ilk sözcükten önce yükselen ses
+  for (let b = 0; b < WORDS.length; b++) {
+    const t = T0 + b * CYCLE, c = CH[b % 4];
+    impact(t, out, b === 0 ? 1 : 0.85);                        // sözcük girişi: sert vuruş
+    sweep(t + WORD_IN + WORD_HOLD, WORD_OUT, 0.22, out);       // sözcük çıkışı: süpürme sesi
+    if (b < 2) bassNote(t, c.r, CYCLE * 0.95, out);
+    else for (let k = 0; k < 8; k++) bassNote(t + k * B / 2, c.r, B * 0.45, out);
+    c.ch.forEach(m => tone(mf(m), t, CYCLE * 0.95, "pad", out));
+    if (b >= 1) for (let k = 0; k < 8; k++) tone(mf(c.ch[k % 3] + 12), t + k * B / 2, B * 0.9, "pluck", out);
+    (b === 0 ? [0] : b === 1 ? [0, 2] : [0, 1, 2, 3]).forEach(k => kick(t + k * B, out, 0.9));
+    if (b >= 1) for (let k = 0; k < 8; k++) hat(t + k * B / 2 + B / 4, out, 0.16);
+    if (b >= 2) { clap(t + B, out, 0.45); clap(t + 3 * B, out, 0.45); }
+    if (b === WORDS.length - 1) for (let k = 0; k < 8; k++) clap(t + 3 * B + k * B / 8, out, 0.15 + k * 0.03);   // son vuruşta artan roll
+  }
+  const tEnd = T0 + WORDS.length * CYCLE;
+  impact(tEnd, out, 1.1); cymbal(tEnd, out);                   // kalp geldiği an büyük vuruş
+}
+
+function initAudio() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  ac = new AC(); ac.resume();
+  master = ac.createGain(); master.gain.value = MUSIC_VOLUME;
+  bus = ac.createGain();
+  const dl = ac.createDelay(1); dl.delayTime.value = 0.33;
+  const fb = ac.createGain(); fb.gain.value = 0.32;
+  const wet = ac.createGain(); wet.gain.value = 0.35;
+  bus.connect(master); bus.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(wet); wet.connect(master);
+  master.connect(ac.destination);
+  document.addEventListener("visibilitychange", () => {
+    if (!ac) return;
+    document.hidden ? ac.suspend() : ac.resume();
+  });
+}
+
+/* ===================== AKIŞ / BUTONLAR ===================== */
+const $ = id => document.getElementById(id);
+async function tryFullscreen() {
+  try {
+    const el = document.documentElement;
+    if (el.requestFullscreen) await el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  } catch (e) {}
+}
+
+// açılış ekranı: telefon zaten yataysa metni değiştir
+function updateIntro() {
+  const land = window.innerWidth > window.innerHeight;
+  const ph = document.querySelector(".phone"), title = $("introTitle"), text = $("introText");
+  if (title) title.textContent = land ? "Harika, böyle kal ❤" : "Telefonunu yan çevir";
+  if (text) text.textContent = land ? "Birazdan başlıyoruz" : "Ekranı yatay yaparsan çok daha güzel görünür";
+  if (ph) ph.classList.toggle("done", land);
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function showErr(e) { const d = document.getElementById("dbg"); if (d) d.textContent = "Hata: " + (e && e.message ? e.message : e); }
+window.addEventListener("error", ev => showErr(ev.message));
+let runId = 0;
+async function sleepUntil(t, id) {
+  while (nowS() < t) {
+    if (id !== runId) return false;
+    await sleep(Math.max(2, Math.min(20, (t - nowS()) * 1000)));
+  }
+  return id === runId;
+}
+
+// 5 sn'lik ekrandan sonra: ekranı yataya döndür (kilit, olmazsa animasyonlu yan çevirme)
+async function goLandscape() {
+  const isLand = () => window.innerWidth > window.innerHeight;
+  try {
+    if (!isLand()) {
+      let locked = false;
+      try {
+        if (screen.orientation && screen.orientation.lock) {
+          // bazı tarayıcılarda cevap hiç gelmeyebilir: en fazla 1.5 sn bekle
+          await Promise.race([screen.orientation.lock("landscape").then(() => { locked = true; }), sleep(1500)]);
+        }
+      } catch (e) {}
+      if (locked) for (let i = 0; i < 15 && !isLand(); i++) await sleep(100);   // ekranın dönmesini bekle
+    }
+    rotWanted = true;
+    $("rotateScreen").classList.add("hidden");
+    if (!isLand()) {
+      $("spinHeart").classList.add("show");                    // hâlâ dikeyse sahneyi animasyonla kendimiz döndürelim
+      applyStage(true);
+      await sleep(1000);
+      $("spinHeart").classList.remove("show");
+    }
+  } catch (e) { console.error(e); }
+  $("rotateScreen").classList.add("hidden");
+}
+
+// You → are → my → love (müzikle birlikte)
+async function playWords(id) {
+  const el = $("word"), scr = $("wordsScreen");
+  const T0 = nowS() + 1.15;                                    // 1 sn'lik yükselme sesinden sonra ilk sözcük
+  if (audioOn()) { try { introMusic(ac.currentTime + 1.15); } catch (e) { console.error(e); } }   // müzik aynı ana hizalanır
+  scr.classList.remove("hidden");
+  for (let k = 0; k < WORDS.length; k++) {
+    const Tk = T0 + k * CYCLE, extra = WORDS[k].toLowerCase() === "love" ? " love" : "";
+    if (!(await sleepUntil(Tk, id))) return false;
+    el.textContent = WORDS[k]; el.style.animationDuration = WORD_IN + "s"; el.className = "in" + extra;
+    if (!(await sleepUntil(Tk + WORD_IN + WORD_HOLD, id))) return false;
+    el.style.animationDuration = WORD_OUT + "s"; el.className = "out" + extra;
+  }
+  if (!(await sleepUntil(T0 + WORDS.length * CYCLE, id))) return false;
+  scr.classList.add("hidden");
+  return true;
+}
+
+async function runSequence(id, first) {
+  try {
+    if (first) {                                               // önce 5 sn'lik "telefonunu yan çevir" ekranı
+      try { updateIntro(); } catch (e) { console.error(e); }
+      $("rotateScreen").classList.remove("hidden");
+      for (let n = INTRO_SECONDS; n > 0; n--) {
+        $("count").textContent = n;
+        await sleep(1000);
+        if (id !== runId) return;
+      }
+      await goLandscape();
+      if (id !== runId) return;
+    }
+    if (!(await playWords(id))) return;
+    begin();
+  } catch (e) {
+    console.error(e); showErr(e);
+    if (id === runId && !started) { ["wordsScreen", "rotateScreen"].forEach(x => $(x).classList.add("hidden")); begin(); }
+  }
+}
+
+function replay() {                                            // animasyonu "You are my love" sözcüklerinden baştan oynat
+  if (!bgOn) return;
+  runId++;
+  started = false; items = []; plants = []; parts.length = 0; grab = null;
+  if (ac) stopAll();
+  ["wordsScreen", "rotateScreen"].forEach(x => $(x).classList.add("hidden"));
+  $("spinHeart").classList.remove("show");
+  runSequence(runId, false);
+}
+
+$("startBtn").addEventListener("click", () => {
+  $("startScreen").classList.add("hidden");
+  try { resize(); cx = W / 2; cy = H / 2; last = performance.now(); bgOn = true; } catch (e) { console.error(e); }
+  try { tryFullscreen(); } catch (e) { console.error(e); }
+  try { initAudio(); startAmbient(); } catch (e) { console.error(e); }
+  const id = ++runId;
+  runSequence(id, true);
+  // güvenlik ağı: ne olursa olsun animasyon başlasın
+  setTimeout(() => {
+    if (!started && id === runId) {
+      ["wordsScreen", "rotateScreen"].forEach(x => $(x).classList.add("hidden"));
+      try { begin(); } catch (e) { console.error(e); }
+    }
+  }, (INTRO_SECONDS + WORDS.length * CYCLE + 16) * 1000);
+});
+
+$("muteBtn").addEventListener("click", () => {
+  if (!ac) return;
+  musicOn = !musicOn;
+  master.gain.setTargetAtTime(musicOn ? MUSIC_VOLUME : 0, ac.currentTime, 0.05);
+  $("muteBtn").textContent = musicOn ? "🔊" : "🔇";
+});
+$("replayBtn").addEventListener("click", replay);
+window.addEventListener("pointerdown", () => { if (ac && ac.state !== "running") ac.resume().catch(() => {}); });
+
+// dokunulan yerden kalpler çıksın; kalbin üstüne dokunup sürüklersen kalp seninle gelir, bırakınca yerine döner
+let touching = false, lastSpawn = 0;
+window.addEventListener("pointerdown", e => {
+  if ((!started && !bgOn) || (e.target.closest && e.target.closest(".ui"))) return;
+  const [lx, ly] = toLogical(e);
+  touching = true;
+  if (started && poly.length && pointInPoly(poly, lx, ly)) { startGrab(lx, ly); spawnHearts(lx, ly, 5); }
+  else spawnHearts(lx, ly, 12);
+  try { if (navigator.vibrate) navigator.vibrate(8); } catch (err) {}
+});
+window.addEventListener("pointermove", e => {
+  if (!touching || (!started && !bgOn)) return;
+  const [lx, ly] = toLogical(e);
+  if (grab) { grab.cx = lx; grab.cy = ly; return; }
+  const n = performance.now();
+  if (n - lastSpawn > 45) { lastSpawn = n; spawnHearts(lx, ly, 2); }
+});
+["pointerup", "pointercancel"].forEach(ev => window.addEventListener(ev, () => { touching = false; grab = null; }));
+</script>
+</body>
+</html>
